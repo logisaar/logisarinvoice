@@ -1,30 +1,42 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 
+interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: { email: string; name: string } | null;
-  login: (email: string, password: string) => boolean;
+  user: AuthUser | null;
+  login: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
+
+const TOKEN_KEY = "admin_token";
+const USER_KEY = "admin_user";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
-    const stored = localStorage.getItem("payinvoice_user");
-    return stored ? JSON.parse(stored) : null;
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    // Clear legacy keys from old auth system
+    localStorage.removeItem("payinvoice_user");
+    const stored = localStorage.getItem(USER_KEY);
+    try { return stored ? JSON.parse(stored) : null; } catch { return null; }
   });
 
-  const login = (email: string, _password: string) => {
-    const u = { email, name: "Admin User" };
-    setUser(u);
-    localStorage.setItem("payinvoice_user", JSON.stringify(u));
-    return true;
+  const login = (token: string, userData: AuthUser) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USER_KEY, JSON.stringify(userData));
+    setUser(userData);
   };
 
   const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     setUser(null);
-    localStorage.removeItem("payinvoice_user");
   };
 
   return (

@@ -32,11 +32,15 @@ export interface Invoice {
   discount: number;
   discountType: "fixed" | "percent";
   grandTotal: number;
+  paymentType?: "full" | "partial" | "onboarding";
+  paymentAmount?: number;
+  paymentLabel?: string;
   notes: string;
   terms: string;
   paidDate?: string;
   transactionId?: string;
   paymentMethod?: string;
+  user?: any;
 }
 
 export const businessDefaults = {

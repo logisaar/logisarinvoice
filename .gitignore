@@ -22,3 +22,23 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+*.pem
+*.key
+*.sqlite
+*.db
+
+# Deployment plan (contains server paths and ops notes — keep private)
+DEPLOYMENT.md
+
+# Production docker-compose override (internal port config)
+docker-compose.prod.yml
+
+# Uploaded files (logos etc. — stored on server, not in repo)
+apps/api/uploads/

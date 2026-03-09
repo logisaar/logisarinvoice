@@ -1,32 +1,78 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import AdminLayout from "@/components/AdminLayout";
 import StatusBadge from "@/components/StatusBadge";
-import { sampleInvoices, dashboardStats } from "@/lib/mock-data";
 import { formatINR, formatDate } from "@/lib/format";
 import {
-  IndianRupee,
-  Clock,
-  FileText,
-  TrendingUp,
-  Plus,
-  Eye,
-  Copy,
+  IndianRupee, Clock, FileText, TrendingUp, Plus, Eye, Copy, RefreshCw, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-const statCards = [
-  { label: "Total Collected", value: formatINR(dashboardStats.totalCollected), icon: IndianRupee, color: "text-success" },
-  { label: "Pending Payments", value: formatINR(dashboardStats.pendingPayments), icon: Clock, color: "text-warning" },
-  { label: "Total Invoices", value: String(dashboardStats.totalInvoices), icon: FileText, color: "text-primary" },
-  { label: "Success Rate", value: `${dashboardStats.successRate}%`, icon: TrendingUp, color: "text-success" },
-];
+const API = import.meta.env.VITE_API_URL ?? "";
+
+interface InvoiceRow {
+  id: number;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  status: string;
+  grandTotal: number;
+  paymentAmount: number;
+  paymentLinkToken: string;
+  client?: { name: string; company?: string };
+  clientGoogleName?: string;
+  transactions?: { status: string; amount: number }[];
+}
 
 export default function Dashboard() {
-  const copyLink = (id: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/invoice/${id}`);
-    toast.success("Payment link copied to clipboard!");
+  const navigate = useNavigate();
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchInvoices = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("admin_token") || "";
+      const res = await fetch(`${API}/api/invoices`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Unauthorized");
+      const data = await res.json();
+      setInvoices(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("Could not load invoices from server.");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => { fetchInvoices(); }, []);
+
+  const copyLink = (token: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/invoice/${token}`);
+    toast.success("Payment link copied!");
+  };
+
+  // Compute live stats
+  const totalCollected = invoices.reduce((s, inv) => {
+    const paid = (inv.transactions || [])
+      .filter((t) => t.status === "success")
+      .reduce((a, t) => a + Number(t.amount), 0);
+    return s + paid;
+  }, 0);
+  const pendingPayments = invoices
+    .filter((i) => i.status !== "paid")
+    .reduce((s, i) => s + Number(i.paymentAmount), 0);
+  const paidCount = invoices.filter((i) => i.status === "paid").length;
+  const successRate = invoices.length ? Math.round((paidCount / invoices.length) * 100) : 0;
+
+  const statCards = [
+    { label: "Total Collected", value: formatINR(totalCollected), icon: IndianRupee, color: "text-success" },
+    { label: "Pending Payments", value: formatINR(pendingPayments), icon: Clock, color: "text-warning" },
+    { label: "Total Invoices", value: String(invoices.length), icon: FileText, color: "text-primary" },
+    { label: "Success Rate", value: `${successRate}%`, icon: TrendingUp, color: "text-success" },
+  ];
 
   return (
     <AdminLayout>
@@ -37,12 +83,17 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground">Welcome back. Here's your invoice overview.</p>
           </div>
-          <Link to="/admin/create">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Invoice
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={fetchInvoices} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
-          </Link>
+            <Link to="/admin/create">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Invoice
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Stats */}
@@ -60,8 +111,9 @@ export default function Dashboard() {
 
         {/* Table */}
         <div className="rounded-xl border bg-card shadow-sm">
-          <div className="p-5 border-b">
+          <div className="p-5 border-b flex items-center justify-between">
             <h2 className="text-lg font-semibold text-card-foreground">Recent Invoices</h2>
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -76,30 +128,56 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {sampleInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                    <td className="px-5 py-4 font-medium text-foreground">{inv.invoiceNumber}</td>
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-foreground">{inv.clientCompany}</p>
-                      <p className="text-xs text-muted-foreground">{inv.clientName}</p>
-                    </td>
-                    <td className="px-5 py-4 text-right font-medium">{formatINR(inv.grandTotal)}</td>
-                    <td className="px-5 py-4 text-center"><StatusBadge status={inv.status} /></td>
-                    <td className="px-5 py-4 text-muted-foreground">{formatDate(inv.invoiceDate)}</td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link to={`/invoice/${inv.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="sm" onClick={() => copyLink(inv.id)}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {!loading && invoices.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
+                      No invoices yet. <Link to="/admin/create" className="text-primary underline">Create your first invoice →</Link>
                     </td>
                   </tr>
-                ))}
+                )}
+                {invoices.map((inv) => {
+                  const clientName = inv.client?.name || inv.clientGoogleName || "—";
+                  const clientCompany = inv.client?.company;
+                  return (
+                    <tr
+                      key={inv.id}
+                      className="border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/admin/invoice/${inv.id}`)}
+                    >
+                      <td className="px-5 py-4 font-medium text-foreground">
+                        <Link
+                          to={`/admin/invoice/${inv.id}`}
+                          className="hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {inv.invoiceNumber}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-foreground">{clientCompany || clientName}</p>
+                        {clientCompany && <p className="text-xs text-muted-foreground">{clientName}</p>}
+                      </td>
+                      <td className="px-5 py-4 text-right font-medium">{formatINR(inv.grandTotal)}</td>
+                      <td className="px-5 py-4 text-center">
+                        <StatusBadge status={inv.status as any} />
+                      </td>
+                      <td className="px-5 py-4 text-muted-foreground">{formatDate(inv.invoiceDate)}</td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Link to={`/admin/invoice/${inv.id}`}>
+                            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+                          </Link>
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => copyLink(inv.paymentLinkToken)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
