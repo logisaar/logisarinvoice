@@ -7,13 +7,16 @@ async function seed() {
     const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
     const prisma = new PrismaClient({ adapter } as any);
 
-    const hash = await bcrypt.hash('Logisaar@2025', 10);
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@paylink.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+
+    const hash = await bcrypt.hash(adminPassword, 10);
 
     const user = await prisma.user.upsert({
-        where: { email: 'admin@paylink.com' },
-        update: { email: 'Logisaar@gmail.com', passwordHash: hash, name: 'Logisaar Admin' },
+        where: { email: adminEmail },
+        update: { email: adminEmail, passwordHash: hash, name: 'Logisaar Admin' },
         create: {
-            email: 'Logisaar@gmail.com',
+            email: adminEmail,
             name: 'Logisaar Admin',
             passwordHash: hash,
             role: 'admin',
@@ -22,7 +25,7 @@ async function seed() {
 
     console.log('✅ Admin credentials updated:');
     console.log('   Email:   ', user.email);
-    console.log('   Password: Logisaar@2025');
+    console.log('   Password: ', adminPassword);
 
     await prisma.$disconnect();
 }
