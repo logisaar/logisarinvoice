@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,45 +19,62 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Tag, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Tag, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatINR } from "@/lib/format";
+
+const API = import.meta.env.VITE_API_URL ?? "";
 
 interface Coupon {
     id: number;
     code: string;
-    discount_type: "percent" | "fixed";
-    discount_value: number;
-    min_amount: number;
-    max_uses: number | null;
-    uses_count: number;
-    valid_until: string | null;
-    is_active: boolean;
+    discountType: "percent" | "fixed";
+    discountValue: number;
+    minAmount: number;
+    maxUses: number | null;
+    usesCount: number;
+    validUntil: string | null;
+    isActive: boolean;
 }
 
 const EMPTY_COUPON = {
     code: "",
-    discount_type: "percent" as "percent" | "fixed",
-    discount_value: 10,
-    min_amount: 0,
-    max_uses: "",
-    valid_until: "",
-    is_active: true,
+    discountType: "percent" as "percent" | "fixed",
+    discountValue: 10,
+    minAmount: 0,
+    maxUses: "",
+    validUntil: "",
+    isActive: true,
 };
 
-// Sample coupons for demo (replace with API calls)
-const SAMPLE_COUPONS: Coupon[] = [
-    { id: 1, code: "WELCOME20", discount_type: "percent", discount_value: 20, min_amount: 500, max_uses: 100, uses_count: 12, valid_until: "2026-12-31", is_active: true },
-    { id: 2, code: "FLAT500", discount_type: "fixed", discount_value: 500, min_amount: 2000, max_uses: null, uses_count: 5, valid_until: null, is_active: true },
-    { id: 3, code: "SPECIAL10", discount_type: "percent", discount_value: 10, min_amount: 0, max_uses: 50, uses_count: 50, valid_until: "2025-01-01", is_active: false },
-];
-
 export default function CouponsPage() {
-    const [coupons, setCoupons] = useState<Coupon[]>(SAMPLE_COUPONS);
+    const [coupons, setCoupons] = useState<Coupon[]>([]);
+    const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState(EMPTY_COUPON);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    const fetchCoupons = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const res = await fetch(`${API}/api/coupons`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to load");
+            const data = await res.json();
+            setCoupons(Array.isArray(data) ? data : []);
+        } catch {
+            toast.error("Failed to fetch coupons.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCoupons();
+    }, []);
 
     const openCreate = () => {
         setEditId(null);
@@ -69,56 +86,86 @@ export default function CouponsPage() {
         setEditId(c.id);
         setForm({
             code: c.code,
-            discount_type: c.discount_type,
-            discount_value: c.discount_value,
-            min_amount: c.min_amount,
-            max_uses: c.max_uses != null ? String(c.max_uses) : "",
-            valid_until: c.valid_until || "",
-            is_active: c.is_active,
+            discountType: c.discountType,
+            discountValue: c.discountValue,
+            minAmount: c.minAmount,
+            maxUses: c.maxUses != null ? String(c.maxUses) : "",
+            validUntil: c.validUntil ? new Date(c.validUntil).toISOString().split("T")[0] : "",
+            isActive: c.isActive,
         });
         setModalOpen(true);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!form.code.trim()) { toast.error("Coupon code is required"); return; }
-        if (form.discount_value <= 0) { toast.error("Discount value must be > 0"); return; }
-        if (form.discount_type === "percent" && form.discount_value > 100) { toast.error("Percent discount cannot exceed 100%"); return; }
+        if (form.discountValue <= 0) { toast.error("Discount value must be > 0"); return; }
+        if (form.discountType === "percent" && form.discountValue > 100) { toast.error("Percent discount cannot exceed 100%"); return; }
 
-        if (editId !== null) {
-            setCoupons((prev) =>
-                prev.map((c) =>
-                    c.id === editId
-                        ? { ...c, ...form, code: form.code.toUpperCase(), max_uses: form.max_uses ? parseInt(form.max_uses) : null, valid_until: form.valid_until || null }
-                        : c
-                )
-            );
-            toast.success("Coupon updated");
-        } else {
-            const newCoupon: Coupon = {
-                id: Date.now(),
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const payload = {
                 code: form.code.toUpperCase(),
-                discount_type: form.discount_type,
-                discount_value: form.discount_value,
-                min_amount: form.min_amount,
-                max_uses: form.max_uses ? parseInt(form.max_uses) : null,
-                uses_count: 0,
-                valid_until: form.valid_until || null,
-                is_active: form.is_active,
+                discountType: form.discountType,
+                discountValue: Number(form.discountValue),
+                minAmount: Number(form.minAmount),
+                maxUses: form.maxUses ? parseInt(form.maxUses) : null,
+                validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : null,
+                isActive: form.isActive, // Check if the prisma type matches boolean
             };
-            setCoupons((prev) => [newCoupon, ...prev]);
-            toast.success("Coupon created");
+
+            if (editId !== null) {
+                const res = await fetch(`${API}/api/coupons/${editId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error("Failed to update coupon.");
+                toast.success("Coupon updated");
+            } else {
+                const res = await fetch(`${API}/api/coupons`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error("Failed to create coupon. Code might already exist.");
+                toast.success("Coupon created");
+            }
+            fetchCoupons();
+            setModalOpen(false);
+        } catch (e: any) {
+            toast.error(e.message || "Operation failed.");
         }
-        setModalOpen(false);
     };
 
-    const handleDelete = (id: number) => {
-        setCoupons((prev) => prev.filter((c) => c.id !== id));
-        setDeleteId(null);
-        toast.success("Coupon deleted");
+    const handleDelete = async (id: number) => {
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const res = await fetch(`${API}/api/coupons/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to delete coupon.");
+            toast.success("Coupon deleted");
+            setDeleteId(null);
+            fetchCoupons();
+        } catch {
+            toast.error("Failed to delete coupon.");
+        }
     };
 
-    const toggleActive = (id: number) => {
-        setCoupons((prev) => prev.map((c) => c.id === id ? { ...c, is_active: !c.is_active } : c));
+    const toggleActive = async (id: number, currentActiveState: boolean) => {
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const res = await fetch(`${API}/api/coupons/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ isActive: !currentActiveState }),
+            });
+            if (!res.ok) throw new Error("Failed");
+            fetchCoupons();
+        } catch {
+            toast.error("Failed to update status.");
+        }
     };
 
     const copyCoupon = (code: string) => {
@@ -127,9 +174,9 @@ export default function CouponsPage() {
     };
 
     const getCouponStatus = (c: Coupon): "active" | "expired" | "used-up" | "inactive" => {
-        if (!c.is_active) return "inactive";
-        if (c.valid_until && new Date(c.valid_until) < new Date()) return "expired";
-        if (c.max_uses !== null && c.uses_count >= c.max_uses) return "used-up";
+        if (!c.isActive) return "inactive";
+        if (c.validUntil && new Date(c.validUntil) < new Date()) return "expired";
+        if (c.maxUses !== null && c.usesCount >= c.maxUses) return "used-up";
         return "active";
     };
 
@@ -163,7 +210,7 @@ export default function CouponsPage() {
                     {[
                         { label: "Total Coupons", value: coupons.length },
                         { label: "Active", value: coupons.filter((c) => getCouponStatus(c) === "active").length },
-                        { label: "Total Uses", value: coupons.reduce((s, c) => s + c.uses_count, 0) },
+                        { label: "Total Uses", value: coupons.reduce((s, c) => s + c.usesCount, 0) },
                         { label: "Inactive / Expired", value: coupons.filter((c) => getCouponStatus(c) !== "active").length },
                     ].map((stat) => (
                         <div key={stat.label} className="rounded-xl border bg-card p-4 shadow-sm">
@@ -193,7 +240,15 @@ export default function CouponsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {coupons.length === 0 && (
+                                {loading && coupons.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+                                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                                            Loading coupons...
+                                        </td>
+                                    </tr>
+                                )}
+                                {!loading && coupons.length === 0 && (
                                     <tr>
                                         <td colSpan={8} className="px-5 py-10 text-center text-muted-foreground">
                                             No coupons yet. Create your first one!
@@ -213,25 +268,25 @@ export default function CouponsPage() {
                                             </div>
                                         </td>
                                         <td className="px-5 py-4 font-medium">
-                                            {c.discount_type === "percent"
-                                                ? `${c.discount_value}% off`
-                                                : `${formatINR(c.discount_value)} off`}
+                                            {c.discountType === "percent"
+                                                ? `${c.discountValue}% off`
+                                                : `${formatINR(c.discountValue)} off`}
                                         </td>
                                         <td className="px-5 py-4 text-muted-foreground">
-                                            {c.min_amount > 0 ? formatINR(c.min_amount) : "—"}
+                                            {c.minAmount > 0 ? formatINR(c.minAmount) : "—"}
                                         </td>
                                         <td className="px-5 py-4 text-center">
-                                            {c.uses_count}
-                                            {c.max_uses != null ? ` / ${c.max_uses}` : ""}
+                                            {c.usesCount}
+                                            {c.maxUses != null ? ` / ${c.maxUses}` : ""}
                                         </td>
                                         <td className="px-5 py-4 text-muted-foreground">
-                                            {c.valid_until
-                                                ? new Date(c.valid_until).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                                            {c.validUntil
+                                                ? new Date(c.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                                                 : "Never"}
                                         </td>
                                         <td className="px-5 py-4 text-center">{statusBadge[getCouponStatus(c)]}</td>
                                         <td className="px-5 py-4 text-center">
-                                            <Switch checked={c.is_active} onCheckedChange={() => toggleActive(c.id)} />
+                                            <Switch checked={c.isActive} onCheckedChange={() => toggleActive(c.id, c.isActive)} />
                                         </td>
                                         <td className="px-5 py-4 text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -272,8 +327,8 @@ export default function CouponsPage() {
                             <div className="space-y-2">
                                 <Label>Discount Type *</Label>
                                 <Select
-                                    value={form.discount_type}
-                                    onValueChange={(v: "percent" | "fixed") => setForm((f) => ({ ...f, discount_type: v }))}
+                                    value={form.discountType}
+                                    onValueChange={(v: "percent" | "fixed") => setForm((f) => ({ ...f, discountType: v }))}
                                 >
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
@@ -287,9 +342,9 @@ export default function CouponsPage() {
                                 <Input
                                     type="number"
                                     min={0}
-                                    max={form.discount_type === "percent" ? 100 : undefined}
-                                    value={form.discount_value}
-                                    onChange={(e) => setForm((f) => ({ ...f, discount_value: Number(e.target.value) }))}
+                                    max={form.discountType === "percent" ? 100 : undefined}
+                                    value={form.discountValue}
+                                    onChange={(e) => setForm((f) => ({ ...f, discountValue: Number(e.target.value) }))}
                                 />
                             </div>
                         </div>
@@ -299,8 +354,8 @@ export default function CouponsPage() {
                                 <Input
                                     type="number"
                                     min={0}
-                                    value={form.min_amount}
-                                    onChange={(e) => setForm((f) => ({ ...f, min_amount: Number(e.target.value) }))}
+                                    value={form.minAmount}
+                                    onChange={(e) => setForm((f) => ({ ...f, minAmount: Number(e.target.value) }))}
                                     placeholder="0 = no minimum"
                                 />
                             </div>
@@ -309,8 +364,8 @@ export default function CouponsPage() {
                                 <Input
                                     type="number"
                                     min={1}
-                                    value={form.max_uses}
-                                    onChange={(e) => setForm((f) => ({ ...f, max_uses: e.target.value }))}
+                                    value={form.maxUses}
+                                    onChange={(e) => setForm((f) => ({ ...f, maxUses: e.target.value }))}
                                     placeholder="Leave blank = unlimited"
                                 />
                             </div>
@@ -319,8 +374,8 @@ export default function CouponsPage() {
                             <Label>Valid Until</Label>
                             <Input
                                 type="date"
-                                value={form.valid_until}
-                                onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value }))}
+                                value={form.validUntil}
+                                onChange={(e) => setForm((f) => ({ ...f, validUntil: e.target.value }))}
                             />
                             <p className="text-xs text-muted-foreground">Leave blank for no expiry</p>
                         </div>
@@ -330,8 +385,8 @@ export default function CouponsPage() {
                                 <p className="text-xs text-muted-foreground">Clients can apply this coupon</p>
                             </div>
                             <Switch
-                                checked={form.is_active}
-                                onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))}
+                                checked={form.isActive}
+                                onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
                             />
                         </div>
                     </div>
