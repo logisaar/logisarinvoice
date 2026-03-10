@@ -2,13 +2,34 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { DiscountType } from '@prisma/client';
 
+import { IsString, IsNumber, IsEnum, IsBoolean, IsOptional, Min, IsDateString } from 'class-validator';
+
 export class CreateCouponDto {
+    @IsString()
     code: string;
+
+    @IsEnum(DiscountType)
     discountType: DiscountType;
+
+    @IsNumber()
+    @Min(0)
     discountValue: number;
+
+    @IsNumber()
+    @Min(0)
+    @IsOptional()
     minAmount?: number;
+
+    @IsNumber()
+    @IsOptional()
     maxUses?: number;
+
+    @IsDateString()
+    @IsOptional()
     validUntil?: string;
+
+    @IsBoolean()
+    @IsOptional()
     isActive?: boolean;
 }
 
