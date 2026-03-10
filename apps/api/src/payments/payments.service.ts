@@ -33,7 +33,7 @@ export class PaymentsService {
 
         // Use new Paytm domain (guide: securestage.paytmpayments.com for staging)
         const host = process.env.PAYTM_HOST || 'securestage.paytmpayments.com';
-        const callbackUrl = `${process.env.BACKEND_URL}/api/payments/callback`;
+        const callbackUrl = `${process.env.BACKEND_URL}/payments/callback`;
 
         // Build request body per new Paytm JS Checkout API
         const paytmBody: Record<string, unknown> = {
