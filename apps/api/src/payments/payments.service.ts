@@ -156,9 +156,13 @@ export class PaymentsService {
             });
         }
 
+        const redirectUrl = success
+            ? `${process.env.FRONTEND_URL}/invoice/${transaction.invoice.paymentLinkToken}/success?txnId=${TXNID}&amount=${TXNAMOUNT || ''}`
+            : `${process.env.FRONTEND_URL}/invoice/${transaction.invoice.paymentLinkToken}?error=payment_failed`;
+
         return {
             success,
-            redirectUrl: `${process.env.FRONTEND_URL}/invoice/${transaction.invoice.paymentLinkToken}/success?txnId=${TXNID}&amount=${TXNAMOUNT || ''}`,
+            redirectUrl,
         };
     }
 }

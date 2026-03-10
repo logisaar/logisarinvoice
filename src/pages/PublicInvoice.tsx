@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { formatINR, formatDate } from "@/lib/format";
 import InvoiceDocument from "@/components/InvoiceDocument";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,15 @@ export default function PublicInvoice() {
   const { invoiceId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("error") === "payment_failed") {
+      toast.error("Payment was cancelled or failed. Please try again.");
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [searchParams]);
 
   // If opened from the portal Pay Now button, user is pre-authenticated — skip sign-in
   const portalUser = (location.state as any)?.portalUser as
