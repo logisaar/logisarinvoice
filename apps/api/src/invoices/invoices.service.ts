@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateInvoiceDto, UpdatePaymentDto, PaymentType } from './dto/invoice.dto';
+import { CreateInvoiceDto, UpdateInvoiceDto, UpdatePaymentDto, PaymentType } from './dto/invoice.dto';
 import { AuthService } from '../auth/auth.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -109,6 +109,94 @@ export class InvoicesService {
                 notes: dto.notes,
                 terms: dto.terms,
                 // Store client info inline (for cases without a client record)
+                clientGoogleName: dto.clientName,
+                items: { create: processedItems },
+            },
+            include: { client: true, items: true, user: { include: { businessSettings: true } } },
+        });
+    }
+
+    // ── Admin: update invoice ─────────────────────────────────────────────────
+    async update(id: number, userId: number, dto: UpdateInvoiceDto) {
+        const inv = await this.prisma.invoice.findFirst({ where: { id, userId } });
+        if (!inv) throw new NotFoundException('Invoice not found');
+        if (inv.status === 'paid') throw new Error('Cannot edit a paid invoice');
+
+        const { items, discountAmount = 0, paymentType = PaymentType.full } = dto;
+
+        // Calculate totals
+        let subtotal = 0, totalTax = 0;
+        const processedItems = items.map((item) => {
+            const baseAmount = Number(item.quantity) * Number(item.unitPrice);
+            const taxAmount = (baseAmount * Number(item.taxPercent)) / 100;
+            subtotal += baseAmount;
+            totalTax += taxAmount;
+            return {
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                taxPercent: item.taxPercent,
+                taxAmount,
+                amount: baseAmount + taxAmount,
+            };
+        });
+
+        const grandTotal = subtotal + totalTax - discountAmount;
+        const paymentAmount = paymentType === 'full' ? grandTotal : (dto.paymentAmount ?? grandTotal);
+
+        let clientId = inv.clientId;
+        if (dto.clientEmail && dto.clientId === 0) {
+            const existingClient = await this.prisma.client.findFirst({
+                where: { email: dto.clientEmail, userId },
+            });
+            if (existingClient) {
+                clientId = existingClient.id;
+                await this.prisma.client.update({
+                    where: { id: existingClient.id },
+                    data: {
+                        name: dto.clientName ?? existingClient.name,
+                        company: dto.clientCompany ?? existingClient.company,
+                        phone: dto.clientPhone ?? existingClient.phone,
+                    },
+                });
+            } else if (dto.clientName || dto.clientCompany) {
+                const newClient = await this.prisma.client.create({
+                    data: {
+                        userId,
+                        email: dto.clientEmail,
+                        name: dto.clientName ?? dto.clientCompany ?? 'Client',
+                        company: dto.clientCompany,
+                        phone: dto.clientPhone,
+                        address: dto.clientAddress,
+                        gstNumber: dto.clientGST,
+                    },
+                });
+                clientId = newClient.id;
+            }
+        } else if (dto.clientId && dto.clientId > 0) {
+            clientId = dto.clientId;
+        }
+
+        // Delete existing items
+        await this.prisma.invoiceItem.deleteMany({ where: { invoiceId: id } });
+
+        // Update invoice and recreate items
+        return this.prisma.invoice.update({
+            where: { id },
+            data: {
+                invoiceNumber: dto.invoiceNumber,
+                invoiceDate: new Date(dto.invoiceDate),
+                dueDate: new Date(dto.dueDate),
+                clientId: clientId ?? null,
+                subtotal,
+                totalTax,
+                discountAmount,
+                grandTotal,
+                paymentType: paymentType as any,
+                paymentAmount,
+                paymentLabel: dto.paymentLabel ?? 'Full Payment',
+                notes: dto.notes,
+                terms: dto.terms,
                 clientGoogleName: dto.clientName,
                 items: { create: processedItems },
             },

@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateInvoiceDto, UpdatePaymentDto, AcceptQuotationDto, FeedbackDto } from './dto/invoice.dto';
+import { CreateInvoiceDto, UpdateInvoiceDto, UpdatePaymentDto, AcceptQuotationDto, FeedbackDto } from './dto/invoice.dto';
 import { AuthService } from '../auth/auth.service';
 
 @Controller('invoices')
@@ -43,6 +43,15 @@ export class InvoicesController {
         return this.invoicesService.updatePayment(id, uid, dto);
     }
 
+    @UseGuards(JwtAuthGuard)
+    @Put(':id')
+    update(
+        @Param('id', ParseIntPipe) id: number,
+        @CurrentUser('id') uid: number,
+        @Body() dto: UpdateInvoiceDto,
+    ) {
+        return this.invoicesService.update(id, uid, dto);
+    }
     @UseGuards(JwtAuthGuard)
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') uid: number) {

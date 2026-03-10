@@ -8,6 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import CreateInvoice from "./pages/CreateInvoice";
+import EditInvoice from "./pages/EditInvoice";
 import PublicInvoice from "./pages/PublicInvoice";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import SettingsPage from "./pages/SettingsPage";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/admin" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/admin/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
             <Route path="/admin/create" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />
+            <Route path="/admin/invoice/:invoiceId/edit" element={<ProtectedRoute><EditInvoice /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
             <Route path="/admin/users/:email" element={<ProtectedRoute><UserDetailPage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

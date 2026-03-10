@@ -37,6 +37,7 @@ export class CreateInvoiceDto {
     @IsString() @IsOptional() notes?: string;
     @IsString() @IsOptional() terms?: string;
 }
+export class UpdateInvoiceDto extends CreateInvoiceDto { }
 
 export class UpdatePaymentDto {
     @IsNumber() @Min(1) paymentAmount: number;

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import {
     ArrowLeft, Copy, Check, Mail, ExternalLink, Link as LinkIcon,
     CreditCard, Star, MessageSquare, IndianRupee, Clock, AlertCircle,
-    RefreshCw, User, Phone, AtSign, MapPin, Loader2, ShieldCheck
+    RefreshCw, User, Phone, AtSign, MapPin, Loader2, ShieldCheck, Edit, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +27,8 @@ export default function InvoiceDetailPage() {
     const [editAmount, setEditAmount] = useState("");
     const [editLabel, setEditLabel] = useState("");
     const [editModalOpen, setEditModalOpen] = useState(false);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const fetchInvoice = async () => {
@@ -129,20 +131,61 @@ export default function InvoiceDetailPage() {
         window.open(`${to}subject=${subject}&body=${body}`, "_blank");
     };
 
+    const deleteInvoice = async () => {
+        setDeleting(true);
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const res = await fetch(`${API}/api/invoices/${invoiceId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed");
+            toast.success("Invoice deleted successfully");
+            navigate("/admin");
+        } catch {
+            toast.error("Failed to delete invoice.");
+            setDeleting(false);
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="max-w-4xl space-y-6">
                 {/* Header */}
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                     <Button variant="ghost" size="sm" onClick={() => navigate("/admin")}>
                         <ArrowLeft className="h-4 w-4 mr-1" /> Dashboard
                     </Button>
-                    <div className="flex-1">
-                        <h1 className="text-xl font-bold text-foreground">{clientCompany || clientName}</h1>
+                    <div className="flex-1 min-w-[200px]">
+                        <h1 className="text-xl font-bold text-foreground truncate">{clientCompany || clientName}</h1>
                         <p className="text-sm text-muted-foreground">{invoice.invoiceNumber} · Created {formatDate(invoice.invoiceDate)}</p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={fetchInvoice}><RefreshCw className="h-4 w-4" /></Button>
-                    <StatusBadge status={invoice.status as any} />
+
+                    <div className="flex items-center gap-2">
+                        <StatusBadge status={invoice.status as any} />
+                        <span className="w-2"></span> {/* Spacer */}
+                        <Button variant="ghost" size="icon" onClick={fetchInvoice} title="Refresh">
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        {!paid && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/admin/invoice/${invoiceId}/edit`)}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                <Edit className="h-4 w-4 mr-1" /> Edit
+                            </Button>
+                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteModalOpen(true)}
+                            className="text-destructive hover:bg-destructive/10"
+                        >
+                            <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -427,6 +470,25 @@ export default function InvoiceDetailPage() {
                         <Button variant="outline" onClick={() => setEditModalOpen(false)}>Cancel</Button>
                         <Button onClick={saveAmountUpdate} disabled={saving}>
                             {saving ? "Saving..." : "Save & Update Link"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Invoice</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete invoice <strong>{invoice.invoiceNumber}</strong>?
+                            This action cannot be undone, and the payment link will stop working immediately.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 justify-end pt-4">
+                        <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>Cancel</Button>
+                        <Button variant="destructive" onClick={deleteInvoice} disabled={deleting}>
+                            {deleting ? "Deleting..." : "Delete Invoice"}
                         </Button>
                     </div>
                 </DialogContent>

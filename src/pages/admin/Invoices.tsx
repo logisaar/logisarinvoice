@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import AdminLayout from "@/components/AdminLayout";
 import StatusBadge from "@/components/StatusBadge";
 import { formatINR, formatDate } from "@/lib/format";
-import { Copy, Eye, Loader2, Plus, Search } from "lucide-react";
+import { Copy, Eye, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -29,6 +30,11 @@ export default function Invoices() {
     const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
+
+    // Deletion state
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [invoiceToDelete, setInvoiceToDelete] = useState<InvoiceRow | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchInvoices = async () => {
         setLoading(true);
@@ -63,6 +69,27 @@ export default function Invoices() {
 
         return invNoMatch || clientNameMatch || clientEmailMatch || companyMatch;
     });
+
+    const handleDelete = async () => {
+        if (!invoiceToDelete) return;
+        setDeleting(true);
+        try {
+            const token = localStorage.getItem("admin_token") || "";
+            const res = await fetch(`${API}/api/invoices/${invoiceToDelete.id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed");
+
+            setInvoices(invoices.filter(i => i.id !== invoiceToDelete.id));
+            toast.success("Invoice deleted successfully");
+            setDeleteModalOpen(false);
+        } catch {
+            toast.error("Failed to delete invoice.");
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     return (
         <AdminLayout>
@@ -171,6 +198,17 @@ export default function Invoices() {
                                                     >
                                                         <Copy className="h-4 w-4" />
                                                     </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                        onClick={() => {
+                                                            setInvoiceToDelete(inv);
+                                                            setDeleteModalOpen(true);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -181,6 +219,25 @@ export default function Invoices() {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Invoice</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete invoice <strong>{invoiceToDelete?.invoiceNumber}</strong>?
+                            This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 justify-end pt-4">
+                        <Button variant="outline" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+                            {deleting ? "Deleting..." : "Delete"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </AdminLayout>
     );
 }
